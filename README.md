@@ -1,0 +1,1 @@
+# NetAutober-2025-Hackathon-tasks
