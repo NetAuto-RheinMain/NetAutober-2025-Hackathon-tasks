@@ -1,13 +1,12 @@
 {
-    "name": "Beginner Lab",
-    "image": "mcr.microsoft.com/devcontainers/base:ubuntu-22.04",
-    "features": {
-      "ghcr.io/devcontainers/features/docker-in-docker:2": {
-        "version": "latest",
-        "dockerDashComposeVersion": "none"
-      }
+  "name": "Beginner Lab",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "latest"
     },
-    "postCreateCommand": "bash /workspaces/.devcontainer/beginners/postCreate.sh",
-    "workspaceFolder": "/workspaces"
-  }
-  
+    "ghcr.io/devcontainers/features/sshd:1": {}
+  },
+  "postCreateCommand": "bash .devcontainer/beginner/postCreate.sh",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}"
+}

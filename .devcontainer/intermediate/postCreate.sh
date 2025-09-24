@@ -29,21 +29,16 @@ rm -rf /tmp/aws /tmp/awscliv2.zip
 aws --version
 
 # ------------------------------------------------------------------------------
-# Docker
+# Docker (Engine + Compose v2)
 # ------------------------------------------------------------------------------
-echo "🐳 Installing Docker..."
-sudo apt-get install -y docker.io docker-compose-plugin
-sudo systemctl enable docker || true
-docker --version
-docker compose version
+echo "🐳 Checking Docker availability..."
+docker --version || echo "⚠️ Docker not found!"
+docker compose version || echo "⚠️ Docker Compose not found!"
 
 # ------------------------------------------------------------------------------
-# Podman
+# Podman (Ubuntu 24.04 native)
 # ------------------------------------------------------------------------------
 echo "🍺 Installing Podman..."
-. /etc/os-release
-echo "deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_${VERSION_ID}/ /" | sudo tee /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list
-curl -L "https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_${VERSION_ID}/Release.key" | sudo apt-key add -
 sudo apt-get update -y
 sudo apt-get install -y podman podman-compose
 podman --version
@@ -61,7 +56,7 @@ ansible --version
 # ------------------------------------------------------------------------------
 echo "🐍 Installing Python packages..."
 pip3 install --upgrade pip
-pip3 install boto3 docker podman-py requests
+pip3 install boto3 docker podman requests
 
 # ------------------------------------------------------------------------------
 # ✅ Final verification
@@ -74,6 +69,6 @@ docker compose version
 podman --version
 ansible --version
 python3 --version
-pip3 show boto3 docker podman-py | grep "Name" || true
+pip3 show boto3 docker podman | grep "Name" || true
 
 echo "✅ Intermediate devcontainer setup complete and verified!"
