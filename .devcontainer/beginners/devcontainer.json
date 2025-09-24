@@ -7,6 +7,6 @@
     },
     "ghcr.io/devcontainers/features/sshd:1": {}
   },
-  "postCreateCommand": "bash .devcontainer/beginner/postCreate.sh",
+  "postCreateCommand": "bash .devcontainer/beginners/postCreate.sh",
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}"
 }
