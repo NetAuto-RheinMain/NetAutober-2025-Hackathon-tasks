@@ -19,11 +19,35 @@ rm -f /tmp/terraform.zip
 terraform -version
 
 # ------------------------------------------------------------------------------
-# Containerlab
+# AWS CLI
 # ------------------------------------------------------------------------------
-echo "🛰 Installing Containerlab..."
-bash -c "$(curl -sL https://get.containerlab.dev)"
-containerlab version
+echo "☁️ Installing AWS CLI v2..."
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
+unzip -o /tmp/awscliv2.zip -d /tmp
+sudo /tmp/aws/install --update
+rm -rf /tmp/aws /tmp/awscliv2.zip
+aws --version
+
+# ------------------------------------------------------------------------------
+# Docker
+# ------------------------------------------------------------------------------
+echo "🐳 Installing Docker..."
+sudo apt-get install -y docker.io docker-compose-plugin
+sudo systemctl enable docker || true
+docker --version
+docker compose version
+
+# ------------------------------------------------------------------------------
+# Podman
+# ------------------------------------------------------------------------------
+echo "🍺 Installing Podman..."
+. /etc/os-release
+echo "deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_${VERSION_ID}/ /" | sudo tee /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list
+curl -L "https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_${VERSION_ID}/Release.key" | sudo apt-key add -
+sudo apt-get update -y
+sudo apt-get install -y podman podman-compose
+podman --version
+podman-compose version
 
 # ------------------------------------------------------------------------------
 # Ansible
@@ -33,38 +57,23 @@ sudo apt-get install -y ansible
 ansible --version
 
 # ------------------------------------------------------------------------------
-# Custom Ansible Collection (SR Linux plugin)
-# ------------------------------------------------------------------------------
-echo "📚 Installing SR Linux Ansible Collection into project directory..."
-mkdir -p /workspaces/.ansible/collections/ansible_collections/nokia
-git clone https://github.com/NetOpsChic/srlinux-ansible-collection.git /workspaces/.ansible/collections/ansible_collections/nokia/srlinux
-
-# Create ansible.cfg pointing to both local and global collection paths
-cat <<EOF > /workspaces/ansible.cfg
-[defaults]
-collections_path = .:~/.ansible/collections
-host_key_checking = False
-retry_files_enabled = False
-EOF
-
-# Verify collection is visible
-ANSIBLE_CONFIG=/workspaces/ansible.cfg ansible-galaxy collection list | grep srlinux || true
-
-# ------------------------------------------------------------------------------
 # Python dependencies
 # ------------------------------------------------------------------------------
 echo "🐍 Installing Python packages..."
 pip3 install --upgrade pip
-pip3 install requests netmiko pytest
+pip3 install boto3 docker podman-py requests
 
 # ------------------------------------------------------------------------------
 # ✅ Final verification
 # ------------------------------------------------------------------------------
 echo "🔍 Verifying installs..."
 terraform -version
-containerlab version
+aws --version
+docker --version
+docker compose version
+podman --version
 ansible --version
 python3 --version
-pip3 show requests netmiko | grep "Name" || true
+pip3 show boto3 docker podman-py | grep "Name" || true
 
-echo "✅ Beginner devcontainer setup complete and verified!"
+echo "✅ Intermediate devcontainer setup complete and verified!"
