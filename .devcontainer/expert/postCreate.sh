@@ -33,7 +33,9 @@ kubectl version --client
 
 # Helm
 echo "⎈ Installing Helm..."
-curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+sudo chmod +x /usr/local/bin/helm
+sudo chown root:root /usr/local/bin/helm
 helm version
 
 # k3d (lightweight k3s in Docker, great for Codespaces)
@@ -41,12 +43,11 @@ echo "🐋 Installing k3d..."
 curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
 k3d version
 
-# Minikube
-echo "📦 Installing Minikube..."
-curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
-sudo install minikube-linux-amd64 /usr/local/bin/minikube
-rm -f minikube-linux-amd64
-minikube version
+# Create a default k3d cluster (single server, no agents)
+echo "🚀 Creating k3d cluster..."
+k3d cluster create dev --wait
+kubectl cluster-info
+kubectl get nodes
 
 # Ansible
 echo "⚙️ Installing Ansible..."
@@ -58,8 +59,8 @@ ansible-galaxy collection install kubernetes.core
 
 # Python deps
 echo "🐍 Installing Python packages..."
-pip3 install --upgrade pip
-pip3 install boto3 kubernetes kubernetes-validate
+pip3 install --upgrade pip --break-system-packages
+pip3 install boto3 kubernetes kubernetes-validate --break-system-packages
 
 # ✅ Final confirmation
 echo "🔍 Verifying installs..."
@@ -68,7 +69,6 @@ aws --version
 kubectl version --client
 helm version
 k3d version
-minikube version
 ansible --version
 python3 --version
 pip3 show boto3 kubernetes
