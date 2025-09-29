@@ -52,10 +52,9 @@ ANSIBLE_CONFIG=/workspaces/ansible.cfg ansible-galaxy collection list | grep srl
 
 # ------------------------------------------------------------------------------
 # Python dependencies
-# ------------------------------------------------------------------------------
 echo "🐍 Installing Python packages..."
-pip3 install --upgrade pip
-pip3 install requests netmiko pytest
+pip3 install --upgrade pip --break-system-packages
+pip3 install requests netmiko pytest --break-system-packages
 
 # ------------------------------------------------------------------------------
 # ✅ Final verification
