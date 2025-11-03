@@ -58,73 +58,32 @@
     mesh_routes:
       clab-topo-srlHamburg:
         next_hop_groups:
-          - name: nhg_n2
+          - name: nhg_nFrankfurt
             admin_state: enable
             nexthops:
               - index: 1
-                ip_address: 40.1.1.2
-          - name: nhg_n3
-            admin_state: enable
-            nexthops:
-              - index: 1
-                ip_address: 60.1.1.2
-          - name: nhg_n4
-            admin_state: enable
-            nexthops:
-              - index: 1
-                ip_address: 30.1.1.1
-        routes:
-          - prefix: 10.0.0.0/8
-            admin_state: enable
-            next_hop_group: nhg_n3
-          - prefix: 20.0.0.0/8
-            admin_state: enable
-            next_hop_group: nhg_n4
-          - prefix: 50.0.0.0/8
-            admin_state: enable
-            next_hop_group: nhg_n2
-
-      clab-topo-srlFrankfurt:
-        next_hop_groups:
-          - name: nhg_n1
-            admin_state: enable
-            nexthops:
-              - index: 1
-                ip_address: 40.1.1.1
-          - name: nhg_n3
-            admin_state: enable
-            nexthops:
-              - index: 1
-                ip_address: 10.1.1.2
-          - name: nhg_n4
-            admin_state: enable
-            nexthops:
-              - index: 1
-                ip_address: 50.1.1.2
-        routes:
-          - prefix: 20.0.0.0/8
-            admin_state: enable
-            next_hop_group: nhg_n4
-          - prefix: 60.0.0.0/8
-            admin_state: enable
-            next_hop_group: nhg_n1
-          - prefix: 30.0.0.0/8
-            admin_state: enable
-            next_hop_group: nhg_n3
-
-      clab-topo-srlCologne:
-        next_hop_groups:
-          - name: nhg_n1
-            admin_state: enable
-            nexthops:
-              - index: 1
-                ip_address: 60.1.1.1
-          - name: nhg_n2
+                ip_address: 30.1.1.2
+          - name: nhg_nCologne
             admin_state: enable
             nexthops:
               - index: 1
                 ip_address: 10.1.1.1
-          - name: nhg_n4
+        routes:
+          - prefix: 30.0.0.0/8
+            admin_state: enable
+            next_hop_group: nhg_nFrankfurt
+          - prefix: 10.0.0.0/8
+            admin_state: enable
+            next_hop_group: nhg_nCologne
+
+      clab-topo-srlFrankfurt:
+        next_hop_groups:
+          - name: nhg_nHamburg
+            admin_state: enable
+            nexthops:
+              - index: 1
+                ip_address: 30.1.1.1
+          - name: nhg_nCologne
             admin_state: enable
             nexthops:
               - index: 1
@@ -132,13 +91,30 @@
         routes:
           - prefix: 30.0.0.0/8
             admin_state: enable
-            next_hop_group: nhg_n1
-          - prefix: 40.0.0.0/8
+            next_hop_group: nhg_nHamburg
+          - prefix: 20.0.0.0/8
             admin_state: enable
-            next_hop_group: nhg_n2
-          - prefix: 50.0.0.0/8
+            next_hop_group: nhg_nCologne
+
+      clab-topo-srlCologne:
+        next_hop_groups:
+          - name: nhg_nHamburg
             admin_state: enable
-            next_hop_group: nhg_n4
+            nexthops:
+              - index: 1
+                ip_address: 10.1.1.1
+          - name: nhg_nCologne
+            admin_state: enable
+            nexthops:
+              - index: 1
+                ip_address: 20.1.1.2
+        routes:
+          - prefix: 10.0.0.0/8
+            admin_state: enable
+            next_hop_group: nhg_nHamburg
+          - prefix: 20.0.0.0/8
+            admin_state: enable
+            next_hop_group: nhg_nCologne
 
      
 
