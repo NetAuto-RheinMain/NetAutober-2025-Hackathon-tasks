@@ -119,7 +119,6 @@
      
 
   tasks:
-
     - name: Create/Update VRFs
       nokia.srlinux.network_instance:
         config: "{{ vrfs }}"
