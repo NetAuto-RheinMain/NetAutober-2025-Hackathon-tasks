@@ -44,13 +44,13 @@
           type: subinterface
           admin_state: enable
           description: to clab-topo-srlHamburg
-          ipv4_address: 10.1.1.2/8
+          ipv4_address: 10.1.1.1/8
           network_instance: blue
         - name: ethernet-1/2.0
           type: subinterface
           admin_state: enable
           description: to clab-topo-srlFrankfurt
-          ipv4_address: 20.1.1.1/8
+          ipv4_address: 20.1.1.2/8
           network_instance: blue
 
 

@@ -75,12 +75,10 @@ if __name__ == "__main__":
     # --- User Configuration ---
     # !! Update these variables to match your Containerlab setup !!
     data = [
-        {"src_ip": "", "src_port": 22, "username": "admin", "password": "admin", "dst1":"","dst2":""},
-        {"src_ip": "", "src_port": 22, "username": "admin", "password": "admin", "dst1":"","dst2":""},
-        {"src_ip": "", "src_port": 22, "username": "admin", "password": "admin", "dst1":"","dst2":""},
+        {"src_ip": "clab-topo-srlHamburg", "src_port": 22, "username": "admin", "password": "admin", "dst1":"30.1.1.2","dst2":"10.1.1.1"},
+        {"src_ip": "clab-topo-srlFrankfurt", "src_port": 22, "username": "admin", "password": "admin", "dst1":"30.1.1.1","dst2":"20.1.1.2"},
+        {"src_ip": "clab-topo-srlCologne", "src_port": 22, "username": "admin", "password": "admin", "dst1":"10.1.1.2","dst2":"20.1.1.1"},
     ]
     for d in data:
-    
         run_srl_ping(d["src_ip"],d["src_port"],d["username"],d["password"],d["dst1"],PING_PACKET_COUNT)
-        
         run_srl_ping(d["src_ip"],d["src_port"],d["username"],d["password"],d["dst2"],PING_PACKET_COUNT)
