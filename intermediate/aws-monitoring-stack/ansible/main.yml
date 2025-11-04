@@ -1,0 +1,215 @@
+---
+- name: 1. Setup Monitoring Server
+  hosts: monitoring_server
+  become: yes
+  tasks:
+    - name: Wait for system to be ready
+      ansible.builtin.wait_for_connection:
+        delay: 10
+        timeout: 60
+
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: yes
+      
+    - name: Install prerequisite packages
+      ansible.builtin.apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+          - python3-pip
+        state: present
+
+    - name: Install Docker
+      ansible.builtin.shell: |
+        curl -fsSL https://get.docker.com -o get-docker.sh
+        sh get-docker.sh
+      args:
+        creates: /usr/bin/docker
+
+    - name: Install Docker Compose
+      ansible.builtin.pip:
+        name: docker-compose
+        state: present
+
+    - name: Add ubuntu user to docker group
+      ansible.builtin.user:
+        name: ubuntu
+        groups: docker
+        append: yes
+
+    - name: Create monitoring config directory
+      ansible.builtin.file:
+        path: /opt/monitoring
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
+
+    - name: Create prometheus config directory
+      ansible.builtin.file:
+        path: /opt/monitoring/prometheus
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
+
+    - name: Create grafana provisioning directory
+      ansible.builtin.file:
+        path: /opt/monitoring/grafana_provisioning/datasources
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
+
+    - name: Template Prometheus config
+      ansible.builtin.template:
+        src: templates/prometheus.yml.j2
+        dest: /opt/monitoring/prometheus/prometheus.yml
+        owner: ubuntu
+        group: ubuntu
+        mode: '0644'
+
+    - name: Template Loki config
+      ansible.builtin.template:
+        src: templates/loki-config.yml.j2
+        dest: /opt/monitoring/loki-config.yml
+        owner: ubuntu
+        group: ubuntu
+        mode: '0644'
+
+    - name: Template Grafana datasource
+      ansible.builtin.template:
+        src: templates/grafana-datasource.yml.j2
+        dest: /opt/monitoring/grafana_provisioning/datasources/datasources.yml
+        owner: ubuntu
+        group: ubuntu
+        mode: '0644'
+
+    - name: Template Docker Compose file
+      ansible.builtin.template:
+        src: templates/docker-compose.yml.j2
+        dest: /opt/monitoring/docker-compose.yml
+        owner: ubuntu
+        group: ubuntu
+        mode: '0644'
+
+    - name: Start the monitoring stack
+      ansible.builtin.shell: "docker-compose -f /opt/monitoring/docker-compose.yml up -d"
+      args:
+        chdir: /opt/monitoring
+      become: no # Run as ubuntu user
+
+- name: 2. Setup Monitored Client
+  hosts: monitored_client
+  become: yes
+  vars:
+    node_exporter_version: "1.8.1"
+    promtail_version: "3.0.0"
+  tasks:
+    - name: Wait for system to be ready
+      ansible.builtin.wait_for_connection:
+        delay: 10
+        timeout: 60
+
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: yes
+
+    - name: Create user for node_exporter
+      ansible.builtin.user:
+        name: node_exporter
+        shell: /bin/false
+        system: yes
+        create_home: no
+
+    # --- Node Exporter ---
+    - name: Download and unarchive Node Exporter
+      ansible.builtin.unarchive:
+        src: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+        dest: /tmp/
+        remote_src: yes
+        
+    - name: Move node_exporter binary
+      ansible.builtin.copy:
+        src: "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64/node_exporter"
+        dest: /usr/local/bin/node_exporter
+        mode: '0755'
+        owner: node_exporter
+        group: node_exporter
+        remote_src: yes
+
+    - name: Create node_exporter systemd service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/node_exporter.service
+        content: |
+          [Unit]
+          Description=Node Exporter
+          Wants=network-online.target
+          After=network-online.target
+
+          [Service]
+          User=node_exporter
+          Group=node_exporter
+          Type=simple
+          ExecStart=/usr/local/bin/node_exporter
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Start and enable node_exporter
+      ansible.builtin.systemd:
+        name: node_exporter
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    # --- Promtail ---
+    - name: Download and unzip Promtail
+      ansible.builtin.unarchive:
+        src: "https://github.com/grafana/loki/releases/download/v{{ promtail_version }}/promtail-linux-amd64.zip"
+        dest: /tmp/
+        remote_src: yes
+
+    - name: Move promtail binary
+      ansible.builtin.copy:
+        src: /tmp/promtail-linux-amd64
+        dest: /usr/local/bin/promtail
+        mode: '0755'
+        remote_src: yes
+
+    - name: Create promtail config directory
+      ansible.builtin.file:
+        path: /etc/promtail
+        state: directory
+
+    - name: Template Promtail config
+      ansible.builtin.template:
+        src: templates/promtail-config.yml.j2
+        dest: /etc/promtail/config.yml
+
+    - name: Create promtail systemd service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/promtail.service
+        content: |
+          [Unit]
+          Description=Promtail
+          Wants=network-online.target
+          After=network-online.target
+
+          [Service]
+          Type=simple
+          ExecStart=/usr/local/bin/promtail -config.file /etc/promtail/config.yml
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Start and enable promtail
+      ansible.builtin.systemd:
+        name: promtail
+        state: started
+        enabled: yes
+        daemon_reload: yes
