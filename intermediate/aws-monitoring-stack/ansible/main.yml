@@ -30,11 +30,6 @@
       args:
         creates: /usr/bin/docker
 
-    - name: Install Docker Compose
-      ansible.builtin.pip:
-        name: docker-compose
-        state: present
-
     - name: Add ubuntu user to docker group
       ansible.builtin.user:
         name: ubuntu
@@ -98,10 +93,10 @@
         mode: '0644'
 
     - name: Start the monitoring stack
-      ansible.builtin.shell: "docker-compose -f /opt/monitoring/docker-compose.yml up -d"
+      ansible.builtin.shell: "docker compose -f /opt/monitoring/docker-compose.yml up -d"
       args:
         chdir: /opt/monitoring
-      become: no # Run as ubuntu user
+      become: yes # Run as ubuntu user
 
 - name: 2. Setup Monitored Client
   hosts: monitored_client
@@ -118,6 +113,11 @@
     - name: Update apt cache
       ansible.builtin.apt:
         update_cache: yes
+
+    - name: Install unzip
+      ansible.builtin.apt:
+        name: unzip
+        state: present
 
     - name: Create user for node_exporter
       ansible.builtin.user:

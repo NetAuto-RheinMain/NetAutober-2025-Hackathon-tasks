@@ -875,7 +875,7 @@ echo "✅ Cleanup complete."
 3.  Wait 5-10 minutes for everything to provision and configure.
 4.  The script will finish by running the Python validation.
 
-### 7\. 📊 Visualize (The Final Step)
+### 7\. 📊 Visualize 
 
 1.  Get the Grafana IP from the `run_automation.sh` output.
 2.  Open your browser to `http://<SERVER_IP>:3000`.
@@ -889,3 +889,5 @@ echo "✅ Cleanup complete."
       * In Explore, switch the datasource to "Loki".
       * In the query box, type `{job="syslog"}` and run the query.
       * You should see all the `syslog` entries from your `monitored-client` VM.
+  
+  
