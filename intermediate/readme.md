@@ -1,13 +1,14 @@
-This is a fantastic and very common project for setting up a modern monitoring environment. The entire process, from provisioning infrastructure to deploying services and validating them, can be almost fully automated.
+# Intermediate Task
 
-I'll provide you with the complete set of files and a master script to run the entire workflow. This solution will provision two AWS EC2 instances:
+The entire process, from provisioning infrastructure to deploying services and validating them, can be almost fully automated.
+This solution will provision two AWS EC2 instances:
 
   * `monitoring-server`: Hosts Prometheus, Loki, and Grafana via Docker Compose.
   * `monitored-client`: Hosts Node Exporter and Promtail, which send metrics and logs to the server.
 
 -----
 
-### 📦 Project Structure
+## 📦 Project Structure
 
 For this to work, organize your files as follows:
 
@@ -27,11 +28,15 @@ aws-monitoring-stack/
 │   ├── variables.tf
 │   ├── outputs.tf
 │   ├── inventory.tpl
-│   └── ssh-key.pub  (You must create this)
+│   ├── ssh-key
+│   └── ssh-key.pub
 ├── validation/
+│   └── load_test.py
 │   └── validate.py
-└── run_automation.sh
-└── run_destroy.sh
+├── create_ssh-secret.sh
+├── run_automation.sh
+├── run_destroy.sh
+└── run_loadtest.sh
 ```
 
 -----
@@ -310,11 +315,6 @@ deprecation_warnings = False
       args:
         creates: /usr/bin/docker
 
-    - name: Install Docker Compose
-      ansible.builtin.pip:
-        name: docker-compose
-        state: present
-
     - name: Add ubuntu user to docker group
       ansible.builtin.user:
         name: ubuntu
@@ -378,10 +378,10 @@ deprecation_warnings = False
         mode: '0644'
 
     - name: Start the monitoring stack
-      ansible.builtin.shell: "docker-compose -f /opt/monitoring/docker-compose.yml up -d"
+      ansible.builtin.shell: "docker compose -f /opt/monitoring/docker-compose.yml up -d"
       args:
         chdir: /opt/monitoring
-      become: no # Run as ubuntu user
+      become: yes # Run as ubuntu user
 
 - name: 2. Setup Monitored Client
   hosts: monitored_client
@@ -398,6 +398,11 @@ deprecation_warnings = False
     - name: Update apt cache
       ansible.builtin.apt:
         update_cache: yes
+
+    - name: Install unzip
+      ansible.builtin.apt:
+        name: unzip
+        state: present
 
     - name: Create user for node_exporter
       ansible.builtin.user:
@@ -563,29 +568,31 @@ scrape_configs:
 (This is a basic, standard Loki config)
 
 ```yaml
+# Corrected config for Loki 3.0
 auth_enabled: false
 
 server:
   http_listen_port: 3100
+  grpc_listen_port: 9096
 
-ingester:
-  lifecycler:
-    address: 127.0.0.1
-    ring:
-      kvstore:
-        store: inmemory
-      replication_factor: 1
-    final_sleep: 0s
-  chunk_idle_period: 5m
-  chunk_retain_period: 30s
-  max_transfer_retries: 0
+common:
+  path_prefix: /tmp/loki
+  storage:
+    filesystem:
+      chunks_directory: /tmp/loki/chunks
+      rules_directory: /tmp/loki/rules
+  replication_factor: 1
+  ring:
+    instance_addr: 127.0.0.1
+    kvstore:
+      store: inmemory
 
 schema_config:
   configs:
-    - from: 2020-10-24
+    - from: 2024-01-01
       store: boltdb-shipper
       object_store: filesystem
-      schema: v11
+      schema: v13
       index:
         prefix: index_
         period: 24h
@@ -595,27 +602,21 @@ storage_config:
     active_index_directory: /tmp/loki/boltdb-shipper-active
     cache_location: /tmp/loki/boltdb-shipper-cache
     cache_ttl: 24h
-    shared_store: filesystem
   filesystem:
     directory: /tmp/loki/chunks
 
 compactor:
   working_directory: /tmp/loki/compactor
-  shared_store: filesystem
+  retention_enabled: true
+  delete_request_store: filesystem
 
 limits_config:
+  allow_structured_metadata: false 
+
   reject_old_samples: true
   reject_old_samples_max_age: 168h
-
-chunk_store_config:
-  max_look_back_period: 0s
-
-table_manager:
-  retention_deletes_enabled: false
-  retention_period: 0s
-
-ruler:
-  alertmanager_url: http://localhost:9093
+  ingestion_rate_mb: 15
+  ingestion_burst_size_mb: 20
 ```
 
 #### `ansible/templates/grafana-datasource.yml.j2`
@@ -890,4 +891,271 @@ echo "✅ Cleanup complete."
       * In the query box, type `{job="syslog"}` and run the query.
       * You should see all the `syslog` entries from your `monitored-client` VM.
   
-  
+### 8. Test the Environment
+
+`validation/run_test.py`
+```python
+import sys
+import time
+import multiprocessing
+import subprocess
+import os
+import random
+
+# --- Worker Functions ---
+
+def cpu_worker(burn_event, stop_event):
+    """
+    A process that will either burn 100% CPU or sleep,
+    based on the state of the 'burn_event'.
+    """
+    pid = os.getpid()
+    print(f"[CPU Worker {pid}]: Started.")
+    try:
+        while not stop_event.is_set():
+            if burn_event.is_set():
+                # High CPU load: busy-wait loop
+                _ = 1 * 1 
+            else:
+                # Low CPU load: sleep to yield the CPU
+                time.sleep(0.01)
+    except KeyboardInterrupt:
+        pass # Handle Ctrl+C
+    print(f"[CPU Worker {pid}]: Stopping.")
+
+
+def memory_worker(chunk_mb, interval_sec, stop_event):
+    """
+    A process that gradually allocates memory in chunks.
+    """
+    pid = os.getpid()
+    print(f"[MEM Worker {pid}]: Started. Will allocate {chunk_mb}MB every {interval_sec}s.")
+    memory_hog = []
+    total_allocated = 0
+    try:
+        while not stop_event.is_set():
+            chunk = bytearray(chunk_mb * 1024 * 1024)
+            memory_hog.append(chunk)
+            total_allocated += chunk_mb
+            print(f"[MEM Worker {pid}]: Allocated {chunk_mb}MB. Total RAM held: {total_allocated}MB")
+            
+            # Sleep until the next interval, checking for stop signal
+            sleep_end = time.time() + interval_sec
+            while time.time() < sleep_end and not stop_event.is_set():
+                time.sleep(0.1)
+                
+    except MemoryError:
+        print(f"[MEM Worker {pid}]: FAILED! Out of memory. Holding {total_allocated}MB.")
+        # Keep the process alive to hold the memory
+        while not stop_event.is_set():
+            time.sleep(1)
+    except KeyboardInterrupt:
+        pass
+    print(f"[MEM Worker {pid}]: Stopping. Releasing {total_allocated}MB.")
+
+
+def log_worker(interval_sec, stop_event):
+    """
+    A process that continuously generates syslog messages.
+    Uses the 'logger' command-line utility.
+    """
+    pid = os.getpid()
+    print(f"[LOG Worker {pid}]: Started. Will log every {interval_sec}s.")
+    log_levels = ["INFO", "WARNING", "ERROR"]
+    try:
+        while not stop_event.is_set():
+            # Generate a random log message
+            level = random.choice(log_levels)
+            message = f"{level}: Dynamic log message from PID {pid}. Value: {random.randint(1000, 9999)}"
+            
+            # Use 'logger' utility to send to syslog
+            try:
+                subprocess.run(
+                    ["logger", "-t", "LoadTest", message], 
+                    check=True,
+                    timeout=0.5
+                )
+            except Exception as e:
+                print(f"[LOG Worker {pid}]: Failed to write to logger: {e}")
+            
+            # Sleep, checking for stop signal
+            sleep_end = time.time() + interval_sec
+            while time.time() < sleep_end and not stop_event.is_set():
+                time.sleep(0.05)
+
+    except KeyboardInterrupt:
+        pass
+    print(f"[LOG Worker {pid}]: Stopping.")
+
+
+# --- Main Controller ---
+
+def run_load_test(total_duration_sec):
+    print(f"--- Starting Dynamic Load Test for {total_duration_sec} seconds ---")
+    
+    # Events to control the child processes
+    stop_event = multiprocessing.Event()
+    cpu_burn_event = multiprocessing.Event()
+    
+    processes = []
+    
+    try:
+        # 1. Start CPU Workers (one for each core)
+        num_cores = multiprocessing.cpu_count()
+        print(f"Starting {num_cores} CPU workers...")
+        for _ in range(num_cores):
+            p = multiprocessing.Process(target=cpu_worker, args=(cpu_burn_event, stop_event))
+            p.start()
+            processes.append(p)
+            
+        # 2. Start Memory Worker
+        print("Starting 1 Memory worker...")
+        p_mem = multiprocessing.Process(target=memory_worker, args=(50, 5, stop_event)) # 50MB every 5s
+        p_mem.start()
+        processes.append(p_mem)
+        
+        # 3. Start Log Worker
+        print("Starting 1 Log worker...")
+        p_log = multiprocessing.Process(target=log_worker, args=(0.5, stop_event)) # Log every 0.5s
+        p_log.start()
+        processes.append(p_log)
+        
+        # 4. Run the main control loop
+        start_time = time.time()
+        while time.time() - start_time < total_duration_sec:
+            # CPU WAVE: 20 seconds ON
+            print("\n[MAIN]: === Ramping CPU UP! === (20s)")
+            cpu_burn_event.set()
+            time.sleep(20)
+            
+            if time.time() - start_time > total_duration_sec:
+                break
+                
+            # CPU WAVE: 10 seconds OFF
+            print("\n[MAIN]: === Ramping CPU DOWN. === (10s)")
+            cpu_burn_event.clear()
+            time.sleep(10)
+        
+        print("\n[MAIN]: --- Total duration finished. ---")
+
+    except KeyboardInterrupt:
+        print("\n[MAIN]: --- Load test interrupted by user. ---")
+    
+    finally:
+        # Stop all child processes
+        print("[MAIN]: Sending stop signal to all workers...")
+        stop_event.set()
+        
+        for p in processes:
+            p.join(timeout=5) # Wait 5s for graceful stop
+            if p.is_alive():
+                print(f"[MAIN]: Process {p.pid} did not exit, terminating...")
+                p.terminate()
+                p.join()
+                
+        print("[MAIN]: --- Load Test Complete. ---")
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("Usage: python3 load_test.py <duration_in_seconds>")
+        sys.exit(1)
+    
+    try:
+        duration = int(sys.argv[1])
+    except ValueError:
+        print("Error: Duration must be an integer.")
+        sys.exit(1)
+        
+    run_load_test(duration)
+```
+
+`run_loadtest.sh`
+```sh
+#!/bin/bash
+set -e
+
+# Default duration in seconds if no argument is given
+DEFAULT_DURATION=60
+DURATION=${1:-$DEFAULT_DURATION}
+
+echo "--- Preparing for load test for $DURATION seconds ---"
+
+# --- Get VM Details ---
+echo "Getting client IP from Terraform..."
+KEY_PATH="terraform/ssh-key"
+CLIENT_IP=$(terraform -chdir=terraform output -raw monitored_client_ip)
+SCRIPT_PATH="validation/load_test.py"
+REMOTE_PATH="/tmp/load_test.py"
+
+if [ -z "$CLIENT_IP" ]; then
+    echo "Error: Could not get client IP from Terraform. Is the stack deployed?"
+    exit 1
+fi
+
+echo "Client IP found: $CLIENT_IP"
+
+# --- Copy Script to Server ---
+echo "Copying load test script to $CLIENT_IP..."
+scp -i $KEY_PATH -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $SCRIPT_PATH ubuntu@$CLIENT_IP:$REMOTE_PATH
+
+# --- Run Script on Server ---
+echo ""
+echo "=========================================================="
+echo "🚀 STARTING LOAD TEST on $CLIENT_IP for $DURATION seconds"
+echo " WATCH YOUR GRAFANA DASHBOARD NOW!"
+echo "=========================================================="
+echo ""
+
+ssh -i $KEY_PATH -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@$CLIENT_IP "python3 $REMOTE_PATH $DURATION"
+
+echo ""
+echo "=========================================================="
+echo "✅ Load test complete."
+echo "Check Grafana for the spike."
+echo "=========================================================="
+```
+
+```bash
+chmod +x run_loadtest.sh
+```
+
+#### 2.  **Open your Grafana Dashboard:**
+
+      * Go to `http://<YOUR-SERVER-IP>:3000`.
+      * Log in (admin/admin).
+      * Go to the **Explore** view.
+      * Select the **Prometheus** datasource.
+      * In the query box, type this PromQL query to see CPU usage:
+        ```promql
+        # This query shows CPU usage percentage by core
+        100 - (avg by (instance, cpu) (rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)
+            * Set the auto-refresh in the top-right to **5 seconds**.
+
+### 3\. What to Watch in Grafana
+
+  * **1. CPU Wave (Prometheus):**
+
+      * **Query:** `100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)`
+      * **What you'll see:** The CPU usage will jump to 100% for 20 seconds, then drop to near 0% for 10 seconds, then repeat. It will look like a square wave.
+
+  * **2. Memory Stair-Step (Prometheus):**
+
+      * **Query:** `node_memory_MemAvailable_bytes{instance=~".*client.*"}` (or just `node_memory_MemAvailable_bytes` and find the client)
+      * **What you'll see:** The "Available Memory" will **decrease** in sharp 50MB steps every 5 seconds, creating a "stair-step down" pattern. When the test ends, it will jump back up as the memory is released.
+
+  * **3. Log Stream (Loki):**
+
+      * **Query:** `{job="syslog"} |~ "LoadTest"`
+      * **What you'll see:** A new log line will appear every 0.5 seconds, with `LoadTest` as the tag. You'll see the "INFO", "WARNING", and "ERROR" messages appearing as they are generated. This confirms Promtail is scraping and Loki is ingesting your logs in real-time.
+
+#### 4.  **Run the Load Test:**
+Run the script from your project root. You can pass a duration (in seconds) or it will default to 60.
+
+```bash
+# Run for the default 60 seconds
+./run_loadtest.sh
+
+# Or, run for 2 minutes (120 seconds)
+./run_loadtest.sh 120
+
+```
