@@ -1,0 +1,20 @@
+# topology documentation: http://containerlab.dev/lab-examples/single-srl/
+name: topo
+topology:
+  kinds:
+    nokia_srlinux:
+      image: ghcr.io/nokia/srlinux
+
+  nodes:
+    srlHamburg:
+      kind: nokia_srlinux
+    srlFrankfurt:
+      kind: nokia_srlinux
+    srlCologne:
+      kind: nokia_srlinux
+
+  links:
+    - endpoints: ["srlHamburg:e1-1","srlFrankfurt:e1-1"]
+    - endpoints: ["srlHamburg:e1-2","srlCologne:e1-1"]
+    - endpoints: ["srlFrankfurt:e1-2","srlCologne:e1-2"]
+
